@@ -1,12 +1,11 @@
 package com.sencoin.CryptoExpress.repository;
 
-import com.sencoin.CryptoExpress.Entities.User;
+import com.sencoin.CryptoExpress.Entities.OtpInfo;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    Optional<User> findByEmail(String email);
+public interface OtpInfoRepository extends JpaRepository<OtpInfo, Long> {
+    Optional<OtpInfo> findByEmail(String email);
 }
