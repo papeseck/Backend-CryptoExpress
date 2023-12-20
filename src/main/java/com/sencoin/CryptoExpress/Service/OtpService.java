@@ -1,7 +1,6 @@
 package com.sencoin.CryptoExpress.Service;
 
 import com.sencoin.CryptoExpress.Entities.OtpInfo;
-import com.sencoin.CryptoExpress.Entities.User;
 import com.sencoin.CryptoExpress.repository.OtpInfoRepository;
 import com.sencoin.CryptoExpress.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +17,8 @@ public class OtpService {
     @Autowired
     private JavaMailSender javaMailSender;
 
+    private String verifiedEmail;
+
     @Autowired
     private OtpInfoRepository otpInfoRepository;
 
@@ -25,34 +26,47 @@ public class OtpService {
     private UserRepository userRepository;
 
     public void sendOtp(String email) {
-        // Vérifier si l'OTP est déjà activé pour cet utilisateur
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Aucun utilisateur trouvé pour cet e-mail."));
 
-        if (!user.isOtpEnabled()) {
-            // Générer un OTP
-            String otp = generateOtp();
+        System.out.println("userRepository.existsByEmail(email)" + userRepository.existsByEmail(email));
 
-            // Enregistrer l'OTP dans la base de données (à associer à l'utilisateur) avec expiration en 5 minutes
-            LocalDateTime expirationTime = LocalDateTime.now().plusMinutes(5);
-            otpInfoRepository.save(new OtpInfo(email, otp, expirationTime));
-
-            // Envoyer l'OTP par e-mail
-            sendEmail(email, "Votre OTP est : " + otp);
-        } else {
-            throw new RuntimeException("L'OTP est déjà activé pour cet utilisateur.");
+        if (userRepository.existsByEmail(email)) {
+            throw new RuntimeException("Cet e-mail est déjà utilisé.");
         }
+
+        String otp = generateOtp();
+        LocalDateTime expirationTime = LocalDateTime.now().plusMinutes(5);
+
+        // Sauvegarder l'e-mail vérifié
+        setVerifiedEmail(email);
+
+        // Sauvegarder l'OTP avec l'e-mail associé
+        otpInfoRepository.save(new OtpInfo(email, otp, expirationTime));
+        System.out.println("OTP généré et sauvegardé : " + otp);
     }
 
-    public boolean isOtpValid(String email, String otp) {
-        // Récupérer l'OTP associé à l'utilisateur depuis la base de données
-        OtpInfo otpInfo = otpInfoRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Aucun OTP trouvé pour cet e-mail."));
+    public void setVerifiedEmail(String email) {
+        this.verifiedEmail = email;
+    }
 
-        // Vérifier si l'OTP est expiré
+    public String getVerifiedEmail() {
+        return verifiedEmail;
+    }
+
+    public boolean isOtpValid(String otp) {
+        // Récupérer l'e-mail vérifié
+        String verifiedEmail = getVerifiedEmail();
+
+        // Récupérer l'OTP associé à l'e-mail vérifié depuis la base de données
+        OtpInfo otpInfo = otpInfoRepository.findByEmail(verifiedEmail)
+                .orElseThrow(() -> {
+                    System.out.println("Aucun OTP trouvé pour cet e-mail : " + verifiedEmail);
+                    return new RuntimeException("Aucun OTP trouvé pour cet e-mail.");
+                });
+
         if (otpInfo.getExpirationTime().isBefore(LocalDateTime.now())) {
             // Supprimer l'OTP expiré de la base de données
             otpInfoRepository.delete(otpInfo);
+            System.out.println("L'OTP est expiré.");
             throw new RuntimeException("L'OTP est expiré.");
         }
 
@@ -61,10 +75,8 @@ public class OtpService {
 
         // Si l'OTP est valide, désactiver l'OTP pour cet utilisateur
         if (isOtpValid) {
-            User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("Aucun utilisateur trouvé pour cet e-mail."));
-            user.setOtpEnabled(false);
-            userRepository.save(user);
+            // Supprimer l'OTP de la base de données
+            otpInfoRepository.delete(otpInfo);
         }
 
         return isOtpValid;
@@ -84,8 +96,6 @@ public class OtpService {
             message.setText(body);
             javaMailSender.send(message);
         } catch (Exception e) {
-            // Log l'exception pour un débogage ultérieur
-            e.printStackTrace();
             throw new RuntimeException("Erreur lors de l'envoi de l'e-mail.");
         }
     }

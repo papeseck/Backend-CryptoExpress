@@ -12,18 +12,12 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false)
-    private String username;
 
     @Column(nullable = false)
     private String password;
+
     @Column(name = "email_confirmed")
     private boolean emailConfirmed;
-
-    public void setPassword(String password) {
-        BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-        this.password = passwordEncoder.encode(password);
-    }
 
     @Transient // Ne pas persister dans la base de données
     private String confirmPassword;
@@ -33,6 +27,11 @@ public class User {
 
     @Column(name = "otp_enabled")
     private boolean otpEnabled;
+
+    public void setPassword(String password) {
+        BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+        this.password = passwordEncoder.encode(password);
+    }
 
     public void setVerified(boolean b) {
     }

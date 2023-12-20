@@ -28,23 +28,30 @@ public class RegistrationService {
         try {
             // Vérifier si l'utilisateur existe déjà
             if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+                logger.error("Cet e-mail est déjà utilisé: {}", user.getEmail());
                 throw new RuntimeException("Cet e-mail est déjà utilisé.");
             }
 
             // Encoder le mot de passe avant de le sauvegarder
             user.setPassword(passwordEncoder.encode(user.getPassword()));
 
+            // Ajouter un log pour imprimer l'e-mail avant l'enregistrement
+            logger.info("Enregistrement de l'utilisateur avec l'e-mail: {}", user.getEmail());
+
             // Enregistrer l'utilisateur dans la base de données
             userRepository.save(user);
-
-            // Générer et envoyer l'OTP si les informations d'inscription sont correctes
-            otpService.sendOtp(user.getEmail());
-
             logger.info("Utilisateur enregistré avec succès: {}", user.getEmail());
         } catch (Exception e) {
             logger.error("Erreur lors de l'enregistrement de l'utilisateur", e);
+
+            // Ajouter ces logs pour imprimer la stack trace complète de l'exception
+            for (StackTraceElement element : e.getStackTrace()) {
+                logger.error(element.toString());
+            }
+
             throw new RuntimeException("Erreur lors de l'enregistrement de l'utilisateur.");
         }
     }
 
 }
+
