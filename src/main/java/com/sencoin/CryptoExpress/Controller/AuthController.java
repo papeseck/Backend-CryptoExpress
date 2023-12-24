@@ -11,6 +11,8 @@ import com.sencoin.CryptoExpress.Service.OtpService;
 import com.sencoin.CryptoExpress.Service.LoginService;
 import com.sencoin.CryptoExpress.repository.UserRepository;
 import io.jsonwebtoken.Jwts;
+import java.security.SecureRandom;
+import java.util.Base64;
 import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -35,6 +37,13 @@ public class AuthController {
     private final EmailConfirmationService emailConfirmationService;
     private final LoginService loginService;
 
+
+    public boolean getLoggedinUser(User user, String providedPassword) {
+        String hashedPassword = user.getPassword();
+
+        // Use passwordEncoder.matches to compare the provided password with the hashed password
+        return passwordEncoder.matches(providedPassword, hashedPassword);
+    }
     public AuthController(RegistrationService registrationService, OtpService otpService, UserRepository userRepository, BCryptPasswordEncoder passwordEncoder, EmailConfirmationService emailConfirmationService, LoginService loginService) {
         this.registrationService = registrationService;
         this.otpService = otpService;
@@ -109,87 +118,38 @@ public class AuthController {
         }
     }
 
+
+
+
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginDto loginDto) {
         try {
             String email = loginDto.getEmail();
             String password = loginDto.getPassword();
 
-            // Recherchez l'utilisateur par e-mail dans la base de données
-            Optional<User> userOptional = userRepository.findByEmail(email);
+            // Utilisez le service de connexion pour gérer l'authentification
+            loginService.loginUser(email, password);
 
-            // Vérifiez si l'utilisateur existe
-            if (userOptional.isPresent()) {
-                // Récupérez le mot de passe stocké dans la base de données
-                String storedPassword = userOptional.get().getPassword();
-                log.info("Mot de passe dans la base de donnees: {}", storedPassword);
-                log.info("Utilisateur trouvé par e-mail: {}", email);
-                log.info("Mot de passe fourni (en clair): {}", password);
+            // Authentification réussie, générer et envoyer l'OTP et le token JWT
+            String responseMessage = loginService.generateAndSendOtp(email);
 
-                // Vérifiez si le mot de passe fourni correspond au mot de passe stocké
-                if (passwordEncoder.matches(password, storedPassword)) {
-                    // Authentification réussie, générer et envoyer l'OTP et le token JWT
-                    String responseMessage = generateAndSendOtp(email);
-
-                    // Retournez le message succès avec le token généré et l'OTP envoyé
-                    return ResponseEntity.ok(responseMessage);
-                } else {
-                    // Ajouter des logs pour enregistrer les informations
-                    log.warn("Identifiants invalides. E-mail: {}", email);
-                    log.warn("Mot de passe fourni (en clair): {}", password);
-
-                    // Retournez une réponse d'échec d'authentification
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Identifiants invalides.");
-                }
-            } else {
-                // Ajouter des logs pour enregistrer les informations
-                log.warn("Utilisateur non trouvé par e-mail: {}", email);
-
-                // Retournez une réponse d'échec d'authentification
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Identifiants invalides.");
-            }
+            // Retournez le message succès avec le token généré et l'OTP envoyé
+            return ResponseEntity.ok(responseMessage);
+        } catch (RuntimeException e) {
+            // En cas d'erreur d'authentification, capturez l'exception et renvoyez une réponse d'échec
+            log.warn("Erreur d'authentification pour l'utilisateur: {}", loginDto.getEmail(), e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Identifiants invalides.");
         } catch (Exception e) {
+            // En cas d'erreur imprévue, capturez l'exception et renvoyez une réponse d'erreur interne
             log.error("Erreur lors de l'authentification", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erreur lors de l'authentification.");
         }
     }
 
-    private String generateAndSendOtp(String email) {
-        try {
-            // Générer et envoyer l'OTP
-            otpService.sendOtp(email);
 
-            // Générer le token JWT
-            String token = generateJWTToken(email);
 
-            // Vous pouvez également stocker le token dans la base de données ou la session utilisateur si nécessaire
 
-            // Retourner le message succès avec le token généré
-            return "Authentification réussie. Un OTP a été envoyé à votre adresse e-mail. Token JWT généré : " + token;
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Gérer les erreurs d'envoi de l'OTP ou de génération du token
-            return "Erreur lors de la génération et de l'envoi de l'OTP ou du token JWT.";
-        }
-    }
+// ...
 
-    private String generateJWTToken(String email) {
-        // Clé secrète pour signer le token (changez cela dans un environnement de production)
-        String secretKey = "votre_cle_secrete";
-
-        // Durée de validité du token (12 heures dans cet exemple)
-        long expirationTime = 12 * 60 * 60 * 1000; // 12 heures en millisecondes
-
-        // Date d'expiration du token
-        Date expirationDate = new Date(System.currentTimeMillis() + expirationTime);
-
-        // Génération du token JWT
-        return Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(expirationDate)
-                .signWith(SignatureAlgorithm.HS512, secretKey)
-                .compact();
-    }
 
 }
